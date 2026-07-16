@@ -1,0 +1,35 @@
+{
+  "skill_name": "security-checklist-audit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "can u check the security of my receipt-vault app before i push it public? its at ~/Documents/claude/projects/receipt-vault, its a next.js app using firebase auth + cloudinary for image uploads",
+      "expected_output": "Filled 16-item checklist in the three original categories. Should catch the hardcoded Firebase apiKey in lib/config.js on item 5, but reason about whether it's actually a problem (Firebase client keys are meant to be public) rather than flatly failing it. Should mark items 7/8/16 (authz checks, API endpoint protection, rate limiting) as N/A with a reason since there are no server API routes in this app -- it's client-only talking to Firebase/Cloudinary directly. Should flag the unsigned Cloudinary upload preset in lib/cloudinary.js under item 15 (file upload security) since there's no server-side validation of what gets uploaded. Ends with the heuristic-scan caveat.",
+      "files": [],
+      "expectations": [
+        "Output covers all 16 checklist items under the three original headings: Frontend Security, Backend Security, Practical Security Habits",
+        "Item 5 (API keys in frontend) references the hardcoded Firebase apiKey found in lib/config.js, not just a generic warning",
+        "Item 5's verdict reasons about Firebase client keys being safe-by-design (protected by Firestore rules) rather than flatly marking it a FAIL with no nuance",
+        "Items 7, 8, and/or 16 (authorization checks, API endpoint protection, rate limiting) are marked N/A with an explanation that there are no server-side API routes in this app, rather than left blank or marked FAIL",
+        "Item 15 (file upload security) flags the unsigned Cloudinary upload preset / lack of server-side upload validation",
+        "Response ends with a caveat that this is a heuristic/static scan and not a substitute for a professional pentest or tools like CodeQL/Semgrep",
+        "Each checklist row has a one-line evidence note (file:line or explicit reason), not a paragraph-length essay per row"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "run a security check on Marketscout, it's at ~/Documents/claude/projects/Marketscout -- it's got real API routes (src/app/api/analyze and src/app/api/geocode) that call out to external services, want to know if anything's exposed before I deploy it",
+      "expected_output": "Filled 16-item checklist. This one has actual API route files, so items 7/8/16 should get real evaluation (pass/fail/needs review) instead of blanket N/A -- check whether the analyze/geocode routes have any auth or rate limiting. Should check .env.local / .env.example for any secrets that leak into client-reachable code (item 5). Should check next.config for security headers (item 10). Ends with the heuristic-scan caveat.",
+      "files": [],
+      "expectations": [
+        "Output covers all 16 checklist items under the three original headings: Frontend Security, Backend Security, Practical Security Habits",
+        "Output references the actual API route files under src/app/api/analyze and/or src/app/api/geocode by name or path, not a generic statement",
+        "Items 7, 8, and 16 (authorization checks, API endpoint protection, rate limiting) get real evaluated verdicts (pass/fail/partial/needs-review) rather than blanket N/A, since this app does have server API routes",
+        "Output checks .env.local / .env.example for secrets that could leak into client-reachable code (item 5)",
+        "Output checks for security headers configuration, e.g. next.config.js/ts (item 10)",
+        "Response ends with a caveat that this is a heuristic/static scan and not a substitute for a professional pentest or tools like CodeQL/Semgrep",
+        "Each checklist row has a one-line evidence note (file:line or explicit reason), not a paragraph-length essay per row"
+      ]
+    }
+  ]
+}
