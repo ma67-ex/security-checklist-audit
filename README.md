@@ -5,7 +5,7 @@ against a fixed 16-item checklist (Frontend Security, Backend Security,
 Practical Security Habits) and returns the checklist filled in with
 pass/fail/partial/N-A plus one-line evidence per item.
 
-It's a static/heuristic scan of code already on disk — no network calls, no
+It's a static/heuristic scan of code already on disk: no network calls, no
 live CVE lookups. Not a substitute for CodeQL, Semgrep, or a professional
 pentest.
 
@@ -14,17 +14,17 @@ pentest.
 `scripts/scan.py` walks a repo directory and applies regex-based checks per
 checklist item, printing JSON with:
 
-- `positive_evidence` — mitigation present (file:line + snippet)
-- `negative_evidence` — risky pattern present (file:line + snippet)
-- `note` — free-text context the script can reason about structurally (e.g.
+- `positive_evidence`: mitigation present (file:line + snippet)
+- `negative_evidence`: risky pattern present (file:line + snippet)
+- `note`: free-text context the script can reason about structurally (e.g.
   "no API route files found," "no lockfile in this tree")
-- `supply_chain_flags` — a separate, repo-wide check for prompt-injection
+- `supply_chain_flags`: a separate, repo-wide check for prompt-injection
   attempts in agent-instruction files (`CLAUDE.md`, `.cursorrules`, ...) and
   suspicious `npm install` lifecycle scripts
 
 It's pattern-matching, not real static analysis (no AST, no data-flow). It
-will miss things and flag things that turn out to be fine on closer read —
-its job is to point a human (or the calling skill) at the right files fast,
+will miss things and flag things that turn out to be fine on closer read.
+Its job is to point a human (or the calling skill) at the right files fast,
 not to be the final word.
 
 ### Usage
