@@ -186,13 +186,22 @@ visible piece of copy as a fill-in-the-blank, not a fixed value:
   It holds two things, always both, in this order:
   1. The `.caveat` disclaimer: keep the wording as-is, it is the same
      disclaimer every run needs.
-  2. A `.footer-meta` row: the site owner's name plus "All rights reserved." in
-     `.rights`, and `.footer-links` with a GitHub link (🐙 emoji prefix, exactly
-     as `🐙 GitHub`) and a LinkedIn link. The name and both URLs are
+  2. A `.footer-meta` row: `&copy; <current year> Muhammad Abdullah. All
+     rights reserved.` in `.rights` on the left, and `.footer-links` with a
+     GitHub link and a LinkedIn link on the right (`justify-content:
+     space-between` does the left/right split, don't override it). No emoji
+     on the GitHub link, plain text `GitHub`. The name and both URLs are
      `Muhammad Abdullah` / `https://github.com/ma67-ex` /
      `https://linkedin.com/in/ma67` (from the user's memory profile). Don't
      invent placeholder values or ask the user again unless that memory is gone
      or the user gives different links.
+- The footer sits at the true bottom of the page: `body` is a flex column
+  with `min-height: 100%` and `.content` is `flex: 1` in that column, so
+  `.report-footer`'s `margin-top: auto` pushes it to the bottom of the
+  viewport on a short report and to the natural end of content on a long one.
+  It is not `position: fixed` — a footer fixed to the viewport while
+  scrolling would sit on top of the findings list. Keep this flex structure;
+  don't collapse `.content` back to a plain block container.
 
 Don't add new CSS classes or inline styles for one-off content. Every finding
 uses the same row shape: severity stripe, title, status pill, two paragraphs,
