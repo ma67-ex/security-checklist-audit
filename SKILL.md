@@ -1,6 +1,6 @@
 ---
 name: security-checklist-audit
-description: Run a first-pass security audit of a local codebase against a fixed 16-item checklist (Frontend Security, Backend Security, Practical Security Habits) and return the checklist filled in with pass/fail/partial/N-A plus one-line evidence per item. Use this whenever the user asks to "check security," "run a security audit," "review this before I push it to GitHub," "is this app secure," or asks about specific risks like XSS, CSRF, SQL injection, exposed API keys, secure cookies, rate limiting, or security headers in one of their own projects. Also trigger when the user pastes or references the security checklist image/table itself and wants it filled out for a given repo. This is a static/heuristic scan of code already on disk (no network calls, no live CVE lookups) — it is not a substitute for CodeQL, Semgrep, or a professional pentest, and the skill says so in its own output.
+description: Run a first-pass security audit of a local codebase against a fixed 16-item checklist (Frontend Security, Backend Security, Practical Security Habits) and return the checklist filled in with pass/fail/partial/N-A plus one-line evidence per item. Also checks for commonly-required site pages (privacy policy, terms of service, accessibility statement) when the codebase looks like it collects user data. Use this whenever the user asks to "check security," "run a security audit," "review this before I push it to GitHub," "is this app secure," asks about specific risks like XSS, CSRF, SQL injection, exposed API keys, secure cookies, rate limiting, or security headers, or asks whether they're missing a privacy policy / terms of service / accessibility page in one of their own projects. Also trigger when the user pastes or references the security checklist image/table itself and wants it filled out for a given repo. This is a static/heuristic scan of code already on disk (no network calls, no live CVE lookups) — it is not a substitute for CodeQL, Semgrep, or a professional pentest, and the skill says so in its own output. The legal-page check is presence-detection, not legal advice.
 ---
 
 # Security checklist audit
@@ -33,7 +33,8 @@ rather than re-deriving grep patterns from scratch each time.
    free-text `note` for cases the script can reason about structurally (e.g.
    "no API route files found at all," "no lockfile in this tree"). It also
    prints a top-level `supply_chain_flags` array — see "Supply-chain check"
-   below, this is separate from the 16 items.
+   below, this is separate from the 16 items — and a top-level `legal_pages`
+   object — see "Legal & compliance pages check" below, also separate.
 
 3. **Read the actual matched files**, don't just trust the snippet field, before
    calling anything CONFIRMED. The script does regex matching, not real static
@@ -65,12 +66,30 @@ rather than re-deriving grep patterns from scratch each time.
    recognizes," not "this is definitely handled." That distinction is the
    whole point of separating CONFIRMED from NEEDS REVIEW.
 
-5. **Render the filled checklist** using the exact template in "Output format"
-   below — same three category headings and same Security Measure / Description
-   wording as the original, with Status and Evidence columns added.
+5. **Render the report as a page, not a chat table.** Copy
+   `scripts/report_template.html` to a working file (temp dir or the repo
+   itself, user's call) and fill in the content per "Output format" below.
+   This is the primary deliverable, not a markdown table in chat.
 
-6. **Close with a one-line caveat** (see end of template) so the user doesn't
-   walk away thinking this was an exhaustive audit.
+6. **Humanize every word of copy you write into the report.** This is a hard
+   requirement on all user-facing text this skill produces: the verdict
+   paragraph, the WHAT/WHY lines, every evidence block, the chat summary.
+   Apply the `humanizer` skill's rules before you commit any of it. The
+   non-negotiable ones: no em or en dashes (`—`, `–`) and no double-hyphen
+   `--` used as one; plain `is`/`are`/`has` over "serves as"/"stands as";
+   sentence case, not Title Case; no rule-of-three padding; no promotional
+   or significance-inflating language; active voice. The copy in
+   `scripts/glossary.md` and the example content already in the template are
+   written to these rules, so if you copy them faithfully you are most of the
+   way there. Grep the finished file for `—`, `–`, and ` -- ` before serving
+   it; any hit means it is not done.
+
+7. **Serve it on localhost and open it.** See "Serving the report" below.
+
+8. **In chat, send only a short summary**: the verdict line, the stat counts,
+   and the localhost URL, and run that summary through the same humanizer
+   rules. The full detail lives on the page. Don't also dump a markdown table
+   into the conversation, that is the exact format this was built to replace.
 
 ## The checklist
 
@@ -112,42 +131,95 @@ calling it confirmed, same as everywhere else in this skill.
 
 ## Output format
 
-ALWAYS use this exact structure. Keep the evidence column to one line — a
-file:line reference or "no matches found," not a paragraph. Save the
-paragraph-length reasoning, if any is needed, for a short "Notes" section
-after the tables, keyed by item number.
+The deliverable is a page, not a chat markdown table. `scripts/report_template.html`
+is the design system: a clean cybersecurity-report look. Near-black ground with
+an olive-green accent, Arial (monospace only for the code in evidence blocks), content
+in a centered readable column (`.content`, max-width 940px). Status is shown by
+a colored left severity stripe plus a status pill, never a bracket tag. There is
+no terminal chrome (no window dots, no `$` prompt, no `//` or `[ ]` markers).
+It is single-theme and already tested for evidence collapse, small viewports,
+and horizontal overflow. **Copy it, then only replace content. Never restyle it
+per repo, and do not bring back a terminal look, extra fonts, or heavy glows.**
+It ships with real example content for a past scan (stocks-app); treat every
+visible piece of copy as a fill-in-the-blank, not a fixed value:
 
-```markdown
-## Security Checklist Audit — <repo name>
+- `<title>` and the `.masthead` `<h1>` / `.sub`: repo name, files scanned count,
+  scan type (leave "static heuristic scan"). Leave the shield SVG as-is.
+- The `.posture` band: set its class to `low`, `moderate`, or `high`, and the
+  `.risk-badge` text to "Low risk" / "Moderate risk" / "High risk". Compute from
+  the worst status present: any FAIL gives `high`; else any WARN gives
+  `moderate`; else `low`. The `<p>` under it is one plain-English paragraph
+  saying why. This is the single most important paragraph on the page. It is the
+  one thing a non-technical user will definitely read, so keep it concrete.
+- The `.sevbar`: five `<span>`s (fail / warn / review / secure / na). Set each
+  `width` to its share of the 16 items as a percent (count / 16 * 100). The
+  `.keys` legend below repeats the raw counts; set each `<b>`.
+- The `.legal-panel` up top: one `.legal-row` per legal page the scan checked
+  (privacy policy, terms of service, accessibility), each with a `.pill` set to
+  `secure` "Present" or `warning` "Missing" from `legal_pages.found` /
+  `legal_pages.missing`. This is the at-a-glance legal readout; the full legal
+  `.section` lower down carries the detail.
+- Each checklist category is one `<section class="section">`: a `.section-head`
+  (leave the SVG icon, set the `<h2>` name and the `.count` like "5 items"),
+  then a `.list` wrapping that category's `<article class="finding"
+  data-status="...">` rows, in the same order as "The checklist" below.
+  `data-status` must be one of `fail`, `warning`, `review`, `secure`, `na`. That
+  drives the left stripe color through CSS, so don't hardcode it. Inside each
+  finding, set the `.pill` class to the same status and its text to the label:
+  "Fail", "Warning", "Needs review", "Secure", "Not applicable" (and "Missing"
+  for legal pages).
+- Inside each finding: the WHAT/WHY lines come from `scripts/glossary.md`,
+  close to verbatim, because that copy is already beginner-safe and already
+  humanized. Don't re-derive it each run. The `<details class="evidence">`
+  block (keep the chevron SVG in the summary) holds the specific finding for
+  this repo (file:line, snippet, reasoning). That is where the per-repo judgment
+  from steps 3 and 4 shows up. An item with zero evidence either way still gets
+  a row; say so plainly in the evidence block ("no matches found for this
+  pattern in the repo") rather than dropping the row.
+- A final `<section>` for legal pages (`legal_pages.missing` from the scan)
+  using `data-status="warning"` and `.pill warning` "Missing". Always render it:
+  it is the detail behind the top `.legal-panel`, and the user specifically
+  wants legal results shown in full, not only counted. Put supply-chain flags
+  here too if `supply_chain_flags` is non-empty, as extra finding rows in their
+  own `.section`. The layout does not care how many sections exist.
+- The page ends with a `<footer class="report-footer">`, not a bare paragraph.
+  It holds two things, always both, in this order:
+  1. The `.caveat` disclaimer: keep the wording as-is, it is the same
+     disclaimer every run needs.
+  2. A `.footer-meta` row: the site owner's name plus "All rights reserved." in
+     `.rights`, and `.footer-links` with a GitHub link (🐙 emoji prefix, exactly
+     as `🐙 GitHub`) and a LinkedIn link. The name and both URLs are
+     `Muhammad Abdullah` / `https://github.com/ma67-ex` /
+     `https://linkedin.com/in/ma67` (from the user's memory profile). Don't
+     invent placeholder values or ask the user again unless that memory is gone
+     or the user gives different links.
 
-### Frontend Security
-| Status | Security Measure | Description | Evidence |
-|---|---|---|---|
-| <emoji+label> | Use HTTPS everywhere | Prevents basic eavesdropping and man-in-the-middle attacks | <file:line or reason> |
-| ... (all 5 items) |
+Don't add new CSS classes or inline styles for one-off content. Every finding
+uses the same row shape: severity stripe, title, status pill, two paragraphs,
+collapsible evidence. If something doesn't seem to fit, it still goes in that
+shape.
 
-### Backend Security
-| Status | Security Measure | Description | Evidence |
-|---|---|---|---|
-| ... (all 6 items) |
+## Serving the report
 
-### Practical Security Habits
-| Status | Security Measure | Description | Evidence |
-|---|---|---|---|
-| ... (all 5 items) |
+Write the filled file as `report.html` in a working directory (a temp/scratch
+dir is fine — this doesn't need to live in the user's repo), then serve it on
+localhost so it opens as a real page, not a markdown dump in chat:
 
-### Notes
-<only for items that need more than one line — reference by item number>
+- **In an environment with a Browser-pane preview tool** (this is the common
+  case in Claude Code sessions): add an entry to the project's
+  `.claude/launch.json` pointing at `python3 -m http.server <port> --directory
+  <dir_containing_report.html>`, then start it with the preview tool and
+  navigate to `report.html`. This is the same mechanism as any other dev
+  server in this environment — nothing report-specific about it.
+- **In a plain CLI environment** (no Browser pane): run
+  `python3 <skill_dir>/scripts/serve_report.py <path_to_report.html>`. It
+  picks a free port, serves the containing directory, opens the system
+  browser, and prints the URL — stdlib only, no dependencies. Tell the user
+  the printed `http://localhost:<port>/report.html` URL in case the browser
+  didn't auto-open.
 
-### Supply-chain check (beyond the 16-item checklist)
-<omit this section entirely if supply_chain_flags is empty — don't print "none found," just leave it out>
-<otherwise one line per flag: file:line, what it is, why it matters>
-
----
-Heuristic first-pass scan (regex-based, no AST/data-flow, no live CVE lookup). Good for catching obvious gaps before a push; not a substitute for CodeQL, Semgrep, or a professional pentest.
-```
-
-Status emoji/labels: `✅ PASS`, `❌ FAIL`, `⚠️ PARTIAL`, `🔎 NEEDS REVIEW`, `➖ N/A`.
+Either way, the URL that goes in the chat summary (workflow step 7) is the
+real `http://localhost:<port>/...` address, not a file:// path.
 
 ### Supply-chain check
 
@@ -179,6 +251,53 @@ Neither check can tell you whether a dependency itself is backdoored — that
 needs the package registry and the actual binary, not this repo's source.
 They only catch the two shapes above. Treat every hit as "go read this file,"
 never as an automatic verdict.
+
+## Legal & compliance pages check
+
+Separate from the 16-item checklist and from the supply-chain check — this
+is site/legal hygiene, not application security, but it's the kind of thing
+that's easy to ship a whole app without noticing is missing. `scan.py`'s
+`legal_pages` output covers three pages:
+
+- **Privacy Policy** — expected almost anywhere the app collects personal
+  data (GDPR/CCPA/similar). `scan.py` treats the site as "collecting data"
+  if it finds an email input field, an analytics/tracking script (GA,
+  Segment, Mixpanel, Meta Pixel, Hotjar, PostHog...), a payment processor
+  (Stripe, PayPal), an email-marketing tool (Mailchimp, ConvertKit,
+  Klaviyo, SendGrid), or its own auth/cookie signals (next-auth, Supabase
+  auth, Firebase auth, bcrypt/argon2, a `Set-Cookie`/`res.cookie(` call).
+  Flagged as missing only carries real weight when `site_collects_data` is
+  `true` — a static site with no forms and no analytics genuinely may not
+  need one.
+- **Terms of Service / Terms of Use** — not tied to data collection the same
+  way; flagged for any site since it's the normal baseline for anything with
+  accounts, user content, or paid features, but weigh it against how public
+  and how commercial the project actually is (a personal portfolio site is a
+  much weaker case than a SaaS app taking signups).
+- **Accessibility Statement** — the "disability page": under the ADA (and
+  similar rules elsewhere), U.S. public-facing sites are expected to be
+  usable by people with disabilities, and a growing number publish a short
+  accessibility statement alongside actual WCAG-conformant markup. Having
+  the statement page without the underlying accessibility work behind it is
+  close to worthless — treat a missing statement as a prompt to ask whether
+  accessibility was considered at all, not just as a missing page to add.
+
+**How detection works, and its limits**: the script looks for a page whose
+file path matches the expected slug (e.g. `pages/privacy.tsx`,
+`app/terms/page.tsx`, `privacy-policy.html`); if no page file is found, it
+falls back to a text match for a link or mention (`/privacy`, "Privacy
+Policy", etc.) anywhere in scanned source, on the theory that a link is
+weaker evidence than a real page but still worth surfacing as "found." A
+page that exists but is copy-pasted boilerplate, outdated, or doesn't match
+what the app actually does won't be caught here — presence, not adequacy,
+is all this checks. It also has no way to know which jurisdiction's rules
+actually bind this specific project (GDPR vs. CCPA vs. nothing at all
+depends on where the users are, not where the code is written).
+
+**Always caveat this section as informational, not legal advice** — say so
+explicitly in the Notes section if `legal_pages.missing` is non-empty, and
+suggest the user confirm requirements with an actual lawyer for anything
+beyond a personal/hobby project.
 
 ## Defense-in-depth checks folded into existing items
 

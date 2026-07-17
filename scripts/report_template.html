@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security scan: stocks-app</title>
+<style>
+  /* ============================================================
+     DESIGN SYSTEM. Keep this CSS as-is on every run of the skill.
+     Only the content inside .content changes per repo. Clean
+     cybersecurity-report look: deep navy ground, cyan accent,
+     severity stripes and status pills, Arial (monospace only for
+     code in evidence blocks). No terminal chrome. See
+     scripts/glossary.md for the WHAT/WHY copy and SKILL.md for the
+     fill-in rules. All copy follows the humanizer rules: no em or
+     en dashes, plain language, sentence case.
+     ============================================================ */
+  :root {
+    --bg: #080803;
+    --surface: #14150d;
+    --surface-2: #0d0e07;
+    --border: #2c2e1c;
+    --border-soft: #1f2013;
+    --text: #ecead9;
+    --text-2: #b6b69a;
+    --dim: #83836a;
+    --accent: #aabf46;
+    --fail: #d95f45;
+    --warn: #cba53a;
+    --review: #d8d3a8;
+    --secure: #aabf46;
+    --na: #5a5c48;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: Arial, Helvetica, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    background:
+      radial-gradient(1100px 500px at 78% -8%, rgba(170,191,70,0.06), transparent 70%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 40px 20px 90px;
+  }
+  .content { max-width: 940px; margin: 0 auto; }
+
+  /* ---- masthead ---- */
+  .masthead { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+  .shield { width: 34px; height: 34px; color: var(--accent); flex-shrink: 0; }
+  .masthead h1 { font-size: 21px; font-weight: 700; color: #fff; margin: 0; letter-spacing: -0.01em; }
+  .masthead .sub { font-size: 12.5px; color: var(--dim); margin-top: 2px; }
+  .lede { color: var(--text-2); margin: 14px 0 26px; max-width: 74ch; }
+
+  /* ---- posture band ---- */
+  .posture {
+    background: linear-gradient(180deg, var(--surface), var(--surface-2));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+  }
+  .risk-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .risk-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 6px 14px; border-radius: 999px;
+  }
+  .risk-badge .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .posture.low .risk-badge { color: var(--secure); background: rgba(170,191,70,0.14); }
+  .posture.low .risk-badge .dot { background: var(--secure); }
+  .posture.moderate .risk-badge { color: var(--warn); background: rgba(203,165,58,0.14); }
+  .posture.moderate .risk-badge .dot { background: var(--warn); }
+  .posture.high .risk-badge { color: var(--fail); background: rgba(217,95,69,0.14); }
+  .posture.high .risk-badge .dot { background: var(--fail); }
+  .posture p { margin: 0; color: var(--text-2); max-width: 78ch; }
+
+  /* stacked severity bar */
+  .sevbar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; margin: 20px 0 14px; background: var(--surface-2); }
+  .sevbar span { display: block; height: 100%; }
+  .sevbar .s-fail { background: var(--fail); }
+  .sevbar .s-warn { background: var(--warn); }
+  .sevbar .s-review { background: var(--review); }
+  .sevbar .s-secure { background: var(--secure); }
+  .sevbar .s-na { background: var(--na); }
+  .keys { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  .key { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+  .key .sq { width: 10px; height: 10px; border-radius: 3px; }
+  .key b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .key.fail .sq { background: var(--fail); } .key.warn .sq { background: var(--warn); }
+  .key.review .sq { background: var(--review); } .key.secure .sq { background: var(--secure); }
+  .key.na .sq { background: var(--na); }
+
+  /* ---- legal panel ---- */
+  .legal-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 24px; margin-bottom: 40px; }
+  .legal-panel .panel-title { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text); margin-bottom: 4px; }
+  .legal-panel .panel-title svg { width: 16px; height: 16px; color: var(--accent); }
+  .legal-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border-soft); }
+  .legal-row:first-of-type { border-top: 0; }
+  .legal-row .name { font-weight: 700; color: var(--text); }
+  .legal-row .name span { display: block; font-weight: 400; font-size: 12.5px; color: var(--dim); margin-top: 1px; }
+
+  /* status pill */
+  .pill { flex-shrink: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; padding: 4px 11px; border-radius: 999px; white-space: nowrap; }
+  .pill.fail { color: var(--fail); background: rgba(217,95,69,0.15); }
+  .pill.warning { color: var(--warn); background: rgba(203,165,58,0.15); }
+  .pill.review { color: var(--review); background: rgba(216,211,168,0.14); }
+  .pill.secure { color: var(--secure); background: rgba(170,191,70,0.15); }
+  .pill.na { color: var(--na); background: rgba(90,92,72,0.35); }
+
+  /* ---- category sections ---- */
+  .section { margin-bottom: 34px; }
+  .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .section-head svg { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+  .section-head h2 { font-size: 16px; font-weight: 700; color: #fff; margin: 0; }
+  .section-head .count { margin-left: auto; font-size: 12.5px; color: var(--dim); }
+
+  .list { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .finding { border-top: 1px solid var(--border-soft); border-left: 3px solid transparent; padding: 16px 20px 16px 18px; }
+  .finding:first-child { border-top: 0; }
+  .finding[data-status="fail"] { border-left-color: var(--fail); }
+  .finding[data-status="warning"] { border-left-color: var(--warn); }
+  .finding[data-status="review"] { border-left-color: var(--review); }
+  .finding[data-status="secure"] { border-left-color: var(--secure); }
+  .finding[data-status="na"] { border-left-color: var(--na); }
+  .finding-row { display: flex; align-items: center; gap: 12px; }
+  .finding-row h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
+  .finding-row .pill { margin-left: auto; }
+  .finding-body { margin-top: 8px; }
+  .finding-body p { margin: 6px 0 0; color: var(--text-2); max-width: 82ch; }
+  .finding-body p b { color: var(--text); font-weight: 700; }
+
+  details.evidence { margin-top: 12px; }
+  details.evidence summary {
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    color: var(--accent); font-size: 13px; font-weight: 700; list-style: none; user-select: none;
+  }
+  details.evidence summary::-webkit-details-marker { display: none; }
+  details.evidence summary::before {
+    content: ""; width: 6px; height: 6px;
+    border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg); transition: transform 0.15s;
+  }
+  details.evidence[open] summary::before { transform: rotate(45deg); }
+  details.evidence pre {
+    font-family: var(--mono); font-size: 12.5px; color: var(--text);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 13px 15px; margin: 10px 0 0; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    line-height: 1.65;
+  }
+  details.evidence pre .path { color: var(--accent); }
+
+  .report-footer { border-top: 1px solid var(--border); padding-top: 22px; margin-top: 40px; }
+  .caveat { color: var(--dim); font-size: 12.5px; line-height: 1.7; max-width: 80ch; margin: 0 0 20px; }
+  .footer-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; font-size: 12.5px; color: var(--dim); }
+  .footer-meta .rights { color: var(--text-2); }
+  .footer-links { display: flex; gap: 18px; }
+  .footer-links a { color: var(--text-2); text-decoration: none; }
+  .footer-links a:hover { color: var(--accent); }
+  a { color: var(--accent); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 560px) {
+    .finding-row { flex-wrap: wrap; }
+    .finding-row .pill { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="content">
+
+  <div class="masthead">
+    <svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+    <div>
+      <h1>Security &amp; compliance scan</h1>
+      <div class="sub">stocks-app &nbsp;·&nbsp; 27 files scanned &nbsp;·&nbsp; static heuristic scan</div>
+    </div>
+  </div>
+  <p class="lede">Plain-English results. Every item says what it checks and why it matters, with no security background assumed. Open the evidence on any item to see exactly what was found and where.</p>
+
+  <div class="posture low">
+    <div class="risk-head">
+      <span class="risk-badge"><span class="dot"></span>Low risk</span>
+    </div>
+    <p>Nothing broken turned up. This is a small static site with no backend, so most backend risks do not apply here. That is because there is no backend to attack, not because the code got lucky. Four items need a quick look from you, and three standard legal pages are missing, though that is low urgency since the app collects no personal data right now.</p>
+
+    <div class="sevbar">
+      <span class="s-fail" style="width:0%"></span>
+      <span class="s-warn" style="width:0%"></span>
+      <span class="s-review" style="width:25%"></span>
+      <span class="s-secure" style="width:6.25%"></span>
+      <span class="s-na" style="width:68.75%"></span>
+    </div>
+    <div class="keys">
+      <span class="key fail"><span class="sq"></span><b>0</b> Fail</span>
+      <span class="key warn"><span class="sq"></span><b>0</b> Warning</span>
+      <span class="key review"><span class="sq"></span><b>4</b> Needs review</span>
+      <span class="key secure"><span class="sq"></span><b>1</b> Secure</span>
+      <span class="key na"><span class="sq"></span><b>11</b> Not applicable</span>
+    </div>
+  </div>
+
+  <div class="legal-panel">
+    <div class="panel-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M5 7h14"/><path d="M7 7l-3 6a3 3 0 0 0 6 0L7 7z"/><path d="M17 7l-3 6a3 3 0 0 0 6 0l-3-6z"/></svg>
+      Legal &amp; compliance pages
+    </div>
+    <div class="legal-row"><div class="name">Privacy policy<span>Required once you collect personal data</span></div><span class="pill warning">Missing</span></div>
+    <div class="legal-row"><div class="name">Terms of service<span>Common baseline for any public site</span></div><span class="pill warning">Missing</span></div>
+    <div class="legal-row"><div class="name">Accessibility statement<span>Expected for public US sites under the ADA</span></div><span class="pill warning">Missing</span></div>
+  </div>
+
+  <div class="content-body">
+
+    <section class="section">
+      <div class="section-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+        <h2>Frontend security</h2>
+        <span class="count">5 items</span>
+      </div>
+      <div class="list">
+
+        <article class="finding" data-status="review">
+          <div class="finding-row"><h3>Use HTTPS everywhere</h3><span class="pill review">Needs review</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether your site encrypts data between visitors' browsers and your server.</p>
+            <p><b>Why it matters:</b> without it, anyone on the same network as your visitor can read or change everything they send, including passwords and form data.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No <span class="path">http://</span> links found in the code. Nothing confirms HTTPS is
+forced either. This is set at the hosting layer (GitHub Pages, Vercel,
+and the like), not in this repo. Check your host's settings to confirm
+HTTPS is forced.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="review">
+          <div class="finding-row"><h3>Input validation and sanitization</h3><span class="pill review">Needs review</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether text visitors type in gets checked before your site trusts it.</p>
+            <p><b>Why it matters:</b> unchecked input is how attackers slip in malicious scripts (called XSS) that run in other visitors' browsers.</p>
+            <details class="evidence"><summary>Evidence</summary><pre><span class="path">index.html:272</span>  &lt;input id="searchInput" placeholder="Search symbol or company"&gt;
+
+One input field. It filters data the page already fetched, on the client
+side. No dangerous sink (innerHTML, eval) shows up anywhere in the scan,
+so the risk is low given the small surface. There is no explicit
+validation either, so this is not a confirmed pass.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="secure">
+          <div class="finding-row"><h3>Don't store sensitive data in the browser</h3><span class="pill secure">Secure</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether passwords, tokens, or personal info end up sitting in the browser, where anyone with dev tools open can read them.</p>
+            <p><b>Why it matters:</b> browser storage is not private. A shared computer or a simple "view source" can expose it.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No localStorage or sessionStorage use found anywhere in the scanned
+files. There is nothing sensitive held on the client side.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>CSRF protection</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether actions on your site can be triggered by a link on some other website your visitor has open.</p>
+            <p><b>Why it matters:</b> without protection, a malicious page can quietly act as your logged-in visitor.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No forms and no state-changing requests exist in this app. It is a
+read-only stock lookup, so there is nothing for CSRF to attack.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Never expose API keys in frontend</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether secret credentials for other services end up baked into code visitors' browsers download.</p>
+            <p><b>Why it matters:</b> anything sent to the browser can be pulled back out by anyone. A leaked key can mean someone else runs up your bill.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No API key patterns found. The app calls free, public stock-data APIs
+that do not need a key.</pre></details>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+        <h2>Backend security</h2>
+        <span class="count">6 items</span>
+      </div>
+      <div class="list">
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Authentication fundamentals</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> how your app confirms who a person is, and how it stores their password.</p>
+            <p><b>Why it matters:</b> weak login is one of the most common ways real apps get taken over.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No accounts, login, or signup exist anywhere in the app.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Authorization checks</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether the app confirms a specific user is allowed to see or change a specific thing, not just that they are logged in.</p>
+            <p><b>Why it matters:</b> without it, anyone can view or delete someone else's data by changing an id in the URL. This bug is called IDOR.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No user-owned resources exist in this app for authorization to apply to.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>API endpoint protection</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether each backend endpoint confirms who is calling it before doing anything.</p>
+            <p><b>Why it matters:</b> an unprotected endpoint is an open door to anyone who finds the URL.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No server-side API route files anywhere in the repo. It is <span class="path">index.html</span>
+plus <span class="path">sw.js</span> only, with no <span class="path">package.json</span> and no server. Static site.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>SQL injection prevention</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether database queries are built safely instead of gluing user input straight into a query string.</p>
+            <p><b>Why it matters:</b> a crafted input can let an attacker read, change, or delete a whole database.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No database, no server, and no SQL anywhere in this repo.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="review">
+          <div class="finding-row"><h3>Basic security headers</h3><span class="pill review">Needs review</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> small server settings that tell browsers extra rules to follow, like refusing to let another site frame yours.</p>
+            <p><b>Why it matters:</b> they are cheap to add and they shut down attacks like clickjacking almost for free.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No headers config found in the repo. These are usually set at the host,
+so check your GitHub Pages or CDN header settings. This one cannot be
+confirmed from source alone.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>DDoS protection</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether something in front of your app can absorb a flood of junk traffic meant to take it down.</p>
+            <p><b>Why it matters:</b> without it, a big flood of requests can knock your site offline.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>This is an infrastructure job, not application code. No CDN config
+(vercel.json, Cloudflare) found in the repo. Verify it at the hosting
+layer.</pre></details>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        <h2>Practical security habits</h2>
+        <span class="count">5 items</span>
+      </div>
+      <div class="list">
+
+        <article class="finding" data-status="review">
+          <div class="finding-row"><h3>Keep dependencies updated</h3><span class="pill review">Needs review</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether the outside libraries your code relies on are reasonably current.</p>
+            <p><b>Why it matters:</b> most real vulnerabilities come from a known, already-fixed bug in an outdated library.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No package.json or lockfile in this tree, so there is nothing to
+npm-audit. If any &lt;script src&gt; CDN libraries load in index.html, check
+their versions by hand.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Proper error handling</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether error messages shown to users leak internal details like file paths or secrets.</p>
+            <p><b>Why it matters:</b> a detailed error shows an attacker exactly how your app is built.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No server exists to leak anything in a response. A client-side fetch
+failure is the worst case here.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Secure cookies</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether cookies your site sets have the right protective flags.</p>
+            <p><b>Why it matters:</b> missing flags let cookies, often login tokens, get stolen through injected scripts.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No cookie-setting code found anywhere in the repo.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>File upload security</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether uploaded files get checked for type and size before your server accepts them.</p>
+            <p><b>Why it matters:</b> an unchecked upload can let someone plant a harmful file on your server.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No upload feature exists in this app.</pre></details>
+          </div>
+        </article>
+
+        <article class="finding" data-status="na">
+          <div class="finding-row"><h3>Rate limiting</h3><span class="pill na">Not applicable</span></div>
+          <div class="finding-body">
+            <p><b>What it checks:</b> whether there is a cap on how many times someone can hit an endpoint in a given time.</p>
+            <p><b>Why it matters:</b> without a cap, attackers can guess passwords over and over or spam an API as fast as they want.</p>
+            <details class="evidence"><summary>Evidence</summary><pre>No server-side API routes exist to rate-limit.</pre></details>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M5 8V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3"/><path d="M3 12h9M3 12l2-2M3 12l2 2"/></svg>
+        <h2>Legal &amp; compliance</h2>
+        <span class="count">3 pages</span>
+      </div>
+      <div class="list">
+
+        <article class="finding" data-status="warning">
+          <div class="finding-row"><h3>Privacy policy</h3><span class="pill warning">Missing</span></div>
+          <div class="finding-body">
+            <p><b>What it is:</b> a page that tells visitors what personal data you collect and what you do with it.</p>
+            <p><b>Why it matters:</b> it is legally required almost anywhere you collect personal data (GDPR, CCPA, and similar). This app shows no forms, analytics, accounts, or cookies, so it is probably not required at its current scope. Re-check if you add analytics or ads later.</p>
+          </div>
+        </article>
+
+        <article class="finding" data-status="warning">
+          <div class="finding-row"><h3>Terms of service</h3><span class="pill warning">Missing</span></div>
+          <div class="finding-body">
+            <p><b>What it is:</b> the rules visitors and users agree to by using your site.</p>
+            <p><b>Why it matters:</b> it is not tied to data collection. It is a common baseline for public sites. Weigh it against how commercial the project actually is.</p>
+          </div>
+        </article>
+
+        <article class="finding" data-status="warning">
+          <div class="finding-row"><h3>Accessibility statement</h3><span class="pill warning">Missing</span></div>
+          <div class="finding-body">
+            <p><b>What it is:</b> a page describing how your site supports people with disabilities, such as screen reader and keyboard support. Some people call this the disability page.</p>
+            <p><b>Why it matters:</b> it is expected for public US sites under the ADA. The statement means little unless the site is actually usable with a keyboard and screen reader, so check that separately. This scan cannot verify it.</p>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="report-footer">
+    <p class="caveat">This is a heuristic first-pass scan. It matches patterns with regular expressions, with no AST, no data-flow analysis, and no live CVE database. It is good for catching obvious gaps before a push. It is not a substitute for CodeQL, Semgrep, or a professional pentest. The legal-pages section is presence-detection, not legal advice. Confirm real requirements with a lawyer for anything beyond a personal project.</p>
+    <div class="footer-meta">
+      <span class="rights">Muhammad Abdullah. All rights reserved.</span>
+      <div class="footer-links">
+        <a href="https://github.com/ma67-ex" target="_blank" rel="noopener">🐙 GitHub</a>
+        <a href="https://linkedin.com/in/ma67" target="_blank" rel="noopener">LinkedIn</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

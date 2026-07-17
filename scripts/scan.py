@@ -10,7 +10,7 @@ It will miss things and it will flag things that turn out to be fine on
 closer read. Its job is to point a human (or the calling skill) at the right
 files fast, not to be the final word. Treat every match as a lead, not a verdict.
 
-Usage: python3 scan.py <repo_path> [--json-only]
+Usage: python3 scan.py <repo_path>
 """
 import argparse
 import json
@@ -26,7 +26,6 @@ CODE_EXTS = {
     ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
     ".py", ".php", ".rb", ".go", ".java",
 }
-CONFIG_NAMES_HINT = ("config", "middleware", "vercel.json", ".env")
 MAX_FILE_BYTES = 1_500_000
 def iter_files(root):
     for dirpath, dirnames, filenames in os.walk(root):
@@ -415,10 +414,92 @@ def scan_supply_chain(root, all_files):
                           + " -- fetch-and-execute or obfuscated-exec shape, read by hand",
                 })
     return flags
+LEGAL_PAGE_EXTS = CODE_EXTS | {".html", ".htm", ".vue", ".svelte", ".md", ".mdx"}
+LEGAL_PAGE_SLUGS = {
+    "privacy_policy": re.compile(r'privacy[-_]?polic|/privacy(?:["\'/\s]|$)', re.IGNORECASE),
+    "terms_of_service": re.compile(r'terms[-_]?of[-_]?(service|use)|/terms(?:["\'/\s]|$)|\bterms-?and-?conditions\b', re.IGNORECASE),
+    "accessibility_statement": re.compile(r'accessibility[-_]?statement|/accessibility(?:["\'/\s]|$)', re.IGNORECASE),
+}
+DATA_COLLECTION_PATTERN = re.compile(
+    r'type=["\']email["\']|name=["\']email["\']|google-analytics\.com|gtag\(|analytics\.js'
+    r'|segment\.(com|io)|mixpanel|amplitude\.com|fbq\(|facebook\.com/tr'
+    r'|hotjar|posthog|stripe\.com|Stripe\(|paypal|mailchimp|convertkit|klaviyo|sendgrid'
+    r'|newsletter.{0,20}(signup|subscribe)|\bsubscribe\b',
+    re.IGNORECASE,
+)
+AUTH_SIGNAL_PATTERN = re.compile(r'next-auth|supabase\.auth|firebase/auth|passport|bcrypt|argon2|getServerSession|@clerk', re.IGNORECASE)
+COOKIE_SIGNAL_PATTERN = re.compile(r'res\.cookie\(|Set-Cookie|cookies\(\)\.set\(', re.IGNORECASE)
+def scan_legal_pages(root, all_files):
+    """Checks for three commonly-legally-required site pages: a privacy
+    policy (required almost anywhere personal data is collected -- GDPR,
+    CCPA, etc.), terms of service/use, and an accessibility statement (ADA/
+    WCAG-adjacent, relevant to US public-facing sites).
+
+    This is presence-detection, not a legal reading: it looks for a page
+    file whose path matches the expected slug, or failing that a link/
+    mention of one in scanned text (nav, footer, layout components). It
+    can't confirm the page's *content* is adequate, and it can't know which
+    jurisdiction's rules actually apply to this project -- flag results as
+    leads for the user to verify, not a legal verdict.
+    """
+    found_pages = {k: [] for k in LEGAL_PAGE_SLUGS}
+    data_signals = []
+    has_auth = False
+    has_cookies = False
+    for path in all_files:
+        rel = os.path.relpath(path, root).replace("\\", "/")
+        low_rel_noext = os.path.splitext(rel.lower())[0]
+        for key, pattern in LEGAL_PAGE_SLUGS.items():
+            if pattern.search(low_rel_noext):
+                found_pages[key].append(rel)
+        ext = os.path.splitext(path)[1].lower()
+        if ext not in LEGAL_PAGE_EXTS:
+            continue
+        text = read_text(path)
+        if text is None:
+            continue
+        if AUTH_SIGNAL_PATTERN.search(text):
+            has_auth = True
+        if COOKIE_SIGNAL_PATTERN.search(text):
+            has_cookies = True
+        for key, pattern in LEGAL_PAGE_SLUGS.items():
+            if found_pages[key]:
+                continue
+            m = pattern.search(text)
+            if m:
+                line_no = text.count("\n", 0, m.start()) + 1
+                found_pages[key].append(f"{rel}:{line_no} (link/mention found, not confirmed to be an actual page)")
+        m = DATA_COLLECTION_PATTERN.search(text)
+        if m:
+            line_no = text.count("\n", 0, m.start()) + 1
+            data_signals.append({"file": rel, "line": line_no, "snippet": text.splitlines()[line_no - 1].strip()[:160]})
+    collects_data = bool(data_signals) or has_auth or has_cookies
+    missing = []
+    if not found_pages["privacy_policy"]:
+        missing.append({
+            "page": "Privacy Policy",
+            "required_if": "collecting any personal data (forms, analytics, auth, cookies)",
+            "site_collects_data": collects_data,
+            "evidence_of_data_collection": data_signals[:3],
+        })
+    if not found_pages["terms_of_service"]:
+        missing.append({
+            "page": "Terms of Service / Terms of Use",
+            "required_if": "generally recommended for any public site with user accounts, content, or paid features",
+            "site_collects_data": collects_data,
+            "evidence_of_data_collection": [],
+        })
+    if not found_pages["accessibility_statement"]:
+        missing.append({
+            "page": "Accessibility Statement",
+            "required_if": "US public-facing sites (ADA); often expected alongside WCAG conformance",
+            "site_collects_data": collects_data,
+            "evidence_of_data_collection": [],
+        })
+    return {"found": {k: v[:3] for k, v in found_pages.items()}, "missing": missing}
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("repo_path")
-    ap.add_argument("--json-only", action="store_true")
     args = ap.parse_args()
     root = os.path.abspath(args.repo_path)
     if not os.path.isdir(root):
@@ -427,6 +508,11 @@ def main():
     result = scan(root)
     all_files = list(iter_files(root))
     supply_chain = scan_supply_chain(root, all_files)
-    print(json.dumps({"repo": root, "items": result, "supply_chain_flags": supply_chain}, indent=2))
+    legal_pages = scan_legal_pages(root, all_files)
+    print(json.dumps({
+        "repo": root, "items": result,
+        "supply_chain_flags": supply_chain,
+        "legal_pages": legal_pages,
+    }, indent=2))
 if __name__ == "__main__":
     main()
