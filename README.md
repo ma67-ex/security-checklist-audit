@@ -1,5 +1,9 @@
 # security-checklist-audit
 
+![Python](https://img.shields.io/badge/python-3-3776AB?logo=python&logoColor=white)
+![Dependencies](https://img.shields.io/badge/dependencies-standard%20library-2ea44f)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 A Claude Code skill that audits a local codebase against a fixed 16-item
 security checklist covering frontend security, backend security, and
 practical security habits. It also checks for a privacy policy, terms of
@@ -94,3 +98,7 @@ scripts/test_legal_pages.py    self-check for the legal-pages logic
 evals/evals.json               eval cases
 references/                    supporting reference material
 ```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
