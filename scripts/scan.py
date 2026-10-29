@@ -13,6 +13,7 @@ files fast, not to be the final word. Treat every match as a lead, not a verdict
 Usage: python3 scan.py <repo_path>
 """
 import argparse
+from bisect import bisect_right
 import json
 import os
 import re
@@ -55,19 +56,27 @@ def read_text(path):
     except OSError:
         return None
 def is_frontend_path(path):
-    p = path.replace("\\", "/").lower()
+    """`path` is relative to the repo root. Judging the absolute path would call every file backend-only when the
+    repo itself sits under a folder named api/, server/ or routes/."""
+    p = "/" + path.replace("\\", "/").lower().lstrip("/")
     backend_only_markers = ("/pages/api/", "/app/api/", "/server/", "/routes/",
                              "/middleware/", "/api/")
     return not any(m in p for m in backend_only_markers)
 def is_api_route(path):
-    p = path.replace("\\", "/").lower()
+    """`path` is relative to the repo root (see is_frontend_path)."""
+    p = "/" + path.replace("\\", "/").lower().lstrip("/")
     return ("/pages/api/" in p) or ("/app/api/" in p and p.endswith(("route.js", "route.ts", "route.jsx", "route.tsx"))) or "/routes/" in p
 COMMENT_LINE_PREFIXES = ("//", "#", "*", "/*")
 def find_matches(text, pattern, path, flags=re.IGNORECASE):
     out = []
+    lines = text.splitlines(keepends=True)
+    starts, pos = [], 0
+    for ln in lines:
+        starts.append(pos)
+        pos += len(ln)
     for m in re.finditer(pattern, text, flags):
-        line_no = text.count("\n", 0, m.start()) + 1
-        line = text.splitlines()[line_no - 1].strip()
+        line_no = bisect_right(starts, m.start())  # 1-based, and no re-splitting the file for every match
+        line = lines[line_no - 1].strip()
         if line.startswith(COMMENT_LINE_PREFIXES):
             continue
         out.append({"file": path, "line": line_no, "snippet": line[:160]})
@@ -110,7 +119,7 @@ def scan(root):
     ]}
     files = list(iter_files(root))
     scannable = [f for f in files if is_scannable(f)]
-    api_route_files = [f for f in scannable if is_api_route(f)]
+    api_route_files = [f for f in scannable if is_api_route(os.path.relpath(f, root))]
     has_orm = False
     has_db_driver_raw = False
     committed_env_files = []
@@ -137,8 +146,8 @@ def scan(root):
             has_lockfile = True
             lockfile_path = rel
             continue
-        frontend = is_frontend_path(path)
-        api_route = is_api_route(path)
+        frontend = is_frontend_path(rel)
+        api_route = is_api_route(rel)
         items[1].negative += find_matches(text, r'["\'`]http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|schemas?\.|www\.w3\.org|json-schema)[a-z0-9.\-]+', rel)
         items[1].positive += find_matches(text, r'(strict-transport-security|hsts|forceSSL|upgrade-insecure-requests)', rel)
         items[1].negative += find_matches(text, r'sslmode\s*=\s*disable|\bssl\s*:\s*false\b|rejectUnauthorized\s*:\s*false', rel)
@@ -267,8 +276,10 @@ def scan(root):
             rel,
         )
         cookie_sets = find_matches(text, r'(res\.cookie\(|Set-Cookie|cookies\(\)\.set\()', rel)
+        cookie_lines = text.splitlines()
         for c in cookie_sets:
-            window = text[max(0, text.find(c["snippet"]) - 20): text.find(c["snippet"]) + 200] if c["snippet"] in text else ""
+            # this call's own options: its line and the few after it (find() on the snippet would hit the first identical line)
+            window = "\n".join(cookie_lines[c["line"] - 1: c["line"] + 6])
             if re.search(r'httpOnly\s*:\s*true', window, re.IGNORECASE) and re.search(r'secure\s*:\s*true', window, re.IGNORECASE):
                 items[14].positive.append(c)
             else:
